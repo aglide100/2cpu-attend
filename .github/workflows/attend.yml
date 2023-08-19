@@ -1,0 +1,53 @@
+name: Run attend and logging to issue
+
+on:
+    schedule:
+        - cron: "0 16 * * *"
+    workflow_dispatch:
+
+jobs:
+    main:
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Checkout Repository
+              uses: actions/checkout@v2
+
+            - name: Set up Python
+              uses: actions/setup-python@v2
+              with:
+                  python-version: 3.8
+
+            - name: Run Python Script
+              env:
+                  ID: ${{ secrets.ID }}
+                  PASSWORD: ${{ secrets.PASSWORD }}
+              run: |
+                  pip install -r requirements.txt
+                  python3 ./main.py > script_output.txt
+                  echo "Script results:"
+                  cat script_output.txt
+
+            - name: Get Current Date
+              id: get-date
+              run: echo "::set-output name=date::$(date +'%Y-%m-%d')"
+
+            - name: Create Issue with Script Result
+              uses: actions/github-script@v4
+              env:
+                  INPUT_DATE: ${{ steps.get-date.outputs.date }}
+              with:
+                  github-token: ${{ secrets.GH_TOKEN }}
+                  script: |
+                      const fs = require('fs');
+                      const content = fs.readFileSync('script_output.txt', 'utf8');
+                      const date = process.env['INPUT_DATE'];
+                      const title = `${date}의 실행결과입니다.`;
+                      const body = "```\n" + content + "\n```";
+
+                      github.issues.create({
+                        repo: context.repo.repo,
+                        owner: context.repo.owner,
+                        title: title,
+                        body: body
+                      });
